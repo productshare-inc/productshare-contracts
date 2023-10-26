@@ -1,8 +1,7 @@
 const { ethers, upgrades } = require("hardhat");
 
 const TOKEN_NAME = "ShareCash";
-const TOKEN_SYMBOL = "PSS";
-
+const TOKEN_SYMBOL = "PSC";
 
 async function deployToken() {
     console.log("deploying contract")
