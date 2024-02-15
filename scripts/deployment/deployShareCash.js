@@ -4,18 +4,16 @@ const TOKEN_NAME = "ShareCash";
 const TOKEN_SYMBOL = "PSC";
 
 async function deployToken() {
-    console.log("deploying contract")
+    console.log("deploying token contract")
     let signers = await ethers.getSigners();
     let admin = signers[0]
-    let ERC11554KFactory = await ethers.getContractFactory('ERC20PresetMinterPauserUpgradeable', admin)    
-    const erc20Token = await upgrades.deployProxy(ERC11554KFactory, [TOKEN_NAME, TOKEN_SYMBOL])
-    await erc20Token.deployed()
+    let ShareCashFactory = await ethers.getContractFactory('ShareCash', admin)    
+    const erc20Token = await upgrades.deployProxy(ShareCashFactory, [TOKEN_NAME, TOKEN_SYMBOL])
     
     console.log("deployed contract: ")
     console.log(erc20Token.address)
 
 }
-
 
 deployToken()
 
