@@ -2,7 +2,7 @@ require("dotenv").config();
 
 require('@openzeppelin/hardhat-upgrades');
 require("@nomiclabs/hardhat-etherscan");
-
+require("hardhat-contract-sizer");
 require("hardhat-gas-reporter");
 require("solidity-coverage");
 require("@nomicfoundation/hardhat-chai-matchers")
@@ -23,23 +23,27 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
  * @type import('hardhat/config').HardhatUserConfig
  */
 module.exports = {
-  solidity: "0.8.20",
-  networks: {
-    ropsten: {
-      url: process.env.ROPSTEN_URL || "",
-      accounts:
-        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+  solidity: {
+    version: '0.8.20',
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
     },
-    optimisticEthereum:{
+  },
+  networks: {
+    optimisticEthereum: {
       url: "https://opt-mainnet.g.alchemy.com/v2/_CMwzqagiVpMeXJBITzEGH_BtPmrVn6J",
       chainId: 10,
       accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
-    optimisticGoerli: {
-      url: "https://opt-goerli.g.alchemy.com/v2/mQjNQDn-XdE7EpiZW0qqirKYi-j0zuI3",
-      chainId: 420,
+    optimisticSepolia: {
+      url: "https://opt-sepolia.g.alchemy.com/v2/VM97KKQZC3kiYc84woykmIRUO1L-eDPq",
+      chainId: 11155420,
       accounts:
-      process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+      gasPrice: 3640000,
     },
   },
   gasReporter: {
@@ -48,9 +52,26 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-      bsc: process.env.bscScanApiKey,
-      optimisticGoerli: process.env.optimismScanApiKey,
-      optimisticEthereum: process.env.optimismScanApiKey
-    }
+      optimisticEthereum: process.env.optimismScanApiKey,
+      optimisticSepolia: process.env.optimismScanApiKey,
+    },
+    customChains: [
+      {
+        network: "optimisticSepolia",
+        chainId: 11155420,
+        urls: {
+          apiURL: "https://api-sepolia-optimistic.etherscan.io/api",
+          browserURL: "https://sepolia-optimism.etherscan.io/",
+        },
+      },
+    ],
   },
-};
+  contractSizer: {
+    alphaSort: true,
+    disambiguatePaths: false,
+    runOnCompile: true,
+    strict: true,
+    only: [],
+  }
+
+}
