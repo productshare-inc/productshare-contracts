@@ -9,9 +9,7 @@ import "./interfaces/ILockupPlans.sol";
 
 /*
     All token amounts MUST be in that token's native decimal
-    */
-
-//TODO would it be useful to have a re-entrancy guard?
+*/
 contract ProductShareTokenSale is
     Initializable,
     AccessControlEnumerableUpgradeable,
@@ -71,10 +69,10 @@ contract ProductShareTokenSale is
     error NothingToRefund();
 
     /*
-    0 -> does not have SALE_ADMIN_ROLE role 
+    0 -> does not have SALE_ADMIN_ROLE role
+    1 -> not on whitelist 
     */
     error Unauthorized(uint256 code);
-
     /*
     Events
 */
@@ -232,7 +230,6 @@ contract ProductShareTokenSale is
         emit saleUnPaused();
     }
 
-    //TODO: need to check if sale is private, check whitelis
     function buy(uint256 tokenInputAmount) public nonReentrant {
         if (!isSaleActive) {
             revert SaleIsPaused();
@@ -249,6 +246,10 @@ contract ProductShareTokenSale is
 
         if (totalAmountInvested + tokenInputAmount > hardcap) {
             revert HardcapReached();
+        }
+
+        if(isPrivateSale && !isWhiteListed[msg.sender]){
+            revert Unauthorized(1);
         }
 
         uint256 amountPurchased = ((tokenInputAmount *
