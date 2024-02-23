@@ -16,10 +16,11 @@ contract StakeShare is
     ERC20BurnableUpgradeable,
     ERC20VotesUpgradeable
 {
-    function initialize(
-        string memory name,
-        string memory symbol
-    ) public virtual initializer {
+    function initialize(string memory name, string memory symbol)
+        public
+        virtual
+        initializer
+    {
         __ERC20_init(name, symbol);
         __ERC20Votes_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
@@ -38,10 +39,11 @@ contract StakeShare is
 
     error ZeroAddress();
 
-    function _update(address from, address to, uint256 value)
-        internal
-        override(ERC20Upgradeable, ERC20VotesUpgradeable)
-    {
+    function _update(
+        address from,
+        address to,
+        uint256 value
+    ) internal override(ERC20Upgradeable, ERC20VotesUpgradeable) {
         super._update(from, to, value);
     }
 
@@ -55,13 +57,12 @@ contract StakeShare is
      * - the caller must have the `MINTER_ROLE`.
      */
     function mint(address to, uint256 amount) public virtual {
-        if(!hasRole(MINTER_ROLE, _msgSender())){
-            revert DoesNotHaveMinterRole( _msgSender());
+        if (!hasRole(MINTER_ROLE, _msgSender())) {
+            revert DoesNotHaveMinterRole(_msgSender());
         }
-        if(to==address(0)){
+        if (to == address(0)) {
             revert ZeroAddress();
         }
         _mint(to, amount);
     }
-
 }

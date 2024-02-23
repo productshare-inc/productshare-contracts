@@ -2,13 +2,19 @@
 pragma solidity 0.8.20;
 
 interface ILockupPlans {
-  function createPlan(
-    address recipient,
-    address token,
-    uint256 amount,
-    uint256 start,
-    uint256 cliff,
-    uint256 rate,
-    uint256 period
-  ) external;
+    function createPlan(
+        address recipient,
+        address token,
+        uint256 amount,
+        uint256 start,
+        uint256 cliff,
+        uint256 rate,
+        uint256 period
+    ) external;
+
+    function safeTransferFrom(
+        address from,
+        address to,
+        uint256 tokenId
+    ) external;
 }

@@ -10,15 +10,31 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-contract ProductShareGovernor is Initializable, GovernorUpgradeable, GovernorSettingsUpgradeable, GovernorCountingSimpleUpgradeable, GovernorVotesUpgradeable, GovernorVotesQuorumFractionUpgradeable, OwnableUpgradeable, UUPSUpgradeable {
+contract ProductShareGovernor is
+    Initializable,
+    GovernorUpgradeable,
+    GovernorSettingsUpgradeable,
+    GovernorCountingSimpleUpgradeable,
+    GovernorVotesUpgradeable,
+    GovernorVotesQuorumFractionUpgradeable,
+    OwnableUpgradeable,
+    UUPSUpgradeable
+{
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(IVotes _token, address initialOwner) initializer public {
+    function initialize(IVotes _token, address initialOwner)
+        public
+        initializer
+    {
         __Governor_init("ProductShareGovernor");
-        __GovernorSettings_init(50400 /* 1 week */, 201600 /* 1 month */, 0);
+        __GovernorSettings_init(
+            50400, /* 1 week */
+            201600, /* 1 month */
+            0
+        );
         __GovernorCountingSimple_init();
         __GovernorVotes_init(_token);
         __GovernorVotesQuorumFraction_init(4);
@@ -28,8 +44,8 @@ contract ProductShareGovernor is Initializable, GovernorUpgradeable, GovernorSet
 
     function _authorizeUpgrade(address newImplementation)
         internal
-        onlyOwner
         override
+        onlyOwner
     {}
 
     // The following functions are overrides required by Solidity.

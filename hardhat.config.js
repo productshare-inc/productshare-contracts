@@ -1,7 +1,6 @@
-require("dotenv").config();
-
+require('dotenv').config({path:__dirname+'/.env'})
 require('@openzeppelin/hardhat-upgrades');
-require("@nomiclabs/hardhat-etherscan");
+require("@nomicfoundation/hardhat-verify");
 require("hardhat-contract-sizer");
 require("hardhat-gas-reporter");
 require("solidity-coverage");
@@ -52,8 +51,8 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-      optimisticEthereum: process.env.optimismScanApiKey,
-      optimisticSepolia: process.env.optimismScanApiKey,
+      optimisticEthereum: process.env.OPTIMISM_SCAN_API_KEY,
+      optimisticSepolia: process.env.OPTIMISM_SCAN_API_KEY,
     },
     customChains: [
       {

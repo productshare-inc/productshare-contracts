@@ -3,16 +3,19 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
-
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "./interfaces/ITOKEN.sol";
 import "./interfaces/ILockupPlans.sol";
 
 /*
     All token amounts MUST be in that token's native decimal
     */
+
+//TODO would it be useful to have a re-entrancy guard?
 contract ProductShareTokenSale is
     Initializable,
-    AccessControlEnumerableUpgradeable
+    AccessControlEnumerableUpgradeable,
+    ReentrancyGuardUpgradeable
 {
     uint256 public startDate;
     uint256 public endDate;
@@ -21,7 +24,6 @@ contract ProductShareTokenSale is
     ITOKEN public tokenToBeAccepted; //for example USDC with 6 decimal points
     ITOKEN public tokenToBeSold; //for example PSS with 18 decimal points
 
-   
     //220000 USDT WEI gets you 1000000000000000000 PSS WEI
     //how many of the tokenToBeAccepted for 1 abstract (not wei) unit of tokenToBeSold
     uint256 public salePrice;
@@ -45,12 +47,17 @@ contract ProductShareTokenSale is
 
     uint256 public vestingLength; //how long a user will be vesting for after cliff.
 
+    bool public hasBeenWithdrawn;
+
+    address public softCapAdminRefundAddress;
+
     /*
     Custom Errors
 */
     error EndDateMustBeInFuture();
     error IsPublicSale();
     error SaleHasEnded();
+    error SaleHasNotEnded();
     error SaleIsPaused();
     error SaleIsActiveAlready();
     error WrongSaleData();
@@ -58,6 +65,10 @@ contract ProductShareTokenSale is
     error WrongVestingData();
     error ZeroInputToken();
     error HardcapReached();
+    error SoftcapNotReached();
+    error SoftcapReached();
+    error AlreadyWithdrawn();
+    error NothingToRefund();
 
     /*
     0 -> does not have SALE_ADMIN_ROLE role 
@@ -73,6 +84,13 @@ contract ProductShareTokenSale is
     event salePaused(string reason);
     event saleUnPaused();
     event salePriceChanged(uint256 newSalePrice);
+    event withdrawn(
+        uint256 withdrawnTokenToBeAccepted,
+        uint256 withdrawnTokenToBeSold
+    );
+    event softCapAdminRefundAddressSet(address newSoftCapAdminRefundAddress);
+
+    event userSoftcapRefundProcessed(address user, uint256 refundAmount);
 
     function initialize(
         ITOKEN _tokenToBeSold,
@@ -87,7 +105,12 @@ contract ProductShareTokenSale is
         if (_endDate <= _startDate) {
             revert EndDateMustBeInFuture();
         }
-        if (_hardcap == 0 || _softcap == 0 || _softcap >= _hardcap || _salePrice == 0 ) {
+        if (
+            _hardcap == 0 ||
+            _softcap == 0 ||
+            _softcap >= _hardcap ||
+            _salePrice == 0
+        ) {
             revert WrongSaleData();
         }
 
@@ -102,6 +125,8 @@ contract ProductShareTokenSale is
 
         hardcap = _hardcap;
         softCap = _softcap;
+
+        softCapAdminRefundAddress = _msgSender();
 
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _grantRole(SALE_ADMIN_ROLE, _msgSender());
@@ -121,7 +146,7 @@ contract ProductShareTokenSale is
             revert ZeroAddress();
         }
 
-        if(_vestPeriod==0 || _vestingLength==0){
+        if (_vestPeriod == 0 || _vestingLength == 0) {
             revert WrongVestingData();
         }
 
@@ -147,9 +172,9 @@ contract ProductShareTokenSale is
         emit addressWhiteListed(whitelistedAddresses);
     }
 
-    function batchWhiteListRemove(
-        address[] calldata unWhitelistedAddresses
-    ) public {
+    function batchWhiteListRemove(address[] calldata unWhitelistedAddresses)
+        public
+    {
         if (!hasRole(SALE_ADMIN_ROLE, _msgSender())) {
             revert Unauthorized(0);
         }
@@ -207,43 +232,47 @@ contract ProductShareTokenSale is
         emit saleUnPaused();
     }
 
-    //work in progress
-    //TODO: what happens when there already is a vesting plan? We need to handle being able to handle users investing more than once
-    function buy(uint256 tokenInputAmount) public {
-
+    //TODO: need to check if sale is private, check whitelis
+    function buy(uint256 tokenInputAmount) public nonReentrant {
         if (!isSaleActive) {
             revert SaleIsPaused();
         }
 
-        if(block.timestamp > endDate){
+        if (block.timestamp > endDate) {
             revert SaleHasEnded();
         }
 
-        if(tokenInputAmount==0){//no minimum purchase amount
+        if (tokenInputAmount == 0) {
+            //no minimum purchase amount
             revert ZeroInputToken();
         }
 
-        if(totalAmountInvested+tokenInputAmount>hardcap){
+        if (totalAmountInvested + tokenInputAmount > hardcap) {
             revert HardcapReached();
         }
 
-        uint256 amountPurchased = ((tokenInputAmount * 10**tokenToBeSold.decimals()) / salePrice);
+        uint256 amountPurchased = ((tokenInputAmount *
+            10**tokenToBeSold.decimals()) / salePrice);
 
         //tokens per period
         uint256 numPeriods = vestingLength / vestPeriod;
         uint256 tokensPerPeriod = amountPurchased / numPeriods;
 
-        userAmountInvested[msg.sender]+=tokenInputAmount;
+        userAmountInvested[msg.sender] += tokenInputAmount;
 
-        totalAmountInvested+=tokenInputAmount;
-        
-        amountOfTokenSold+=amountPurchased;
+        totalAmountInvested += tokenInputAmount;
+
+        amountOfTokenSold += amountPurchased;
 
         //transfer input tokens to this contract
-        tokenToBeAccepted.transferFrom(msg.sender,address(this),tokenInputAmount);
+        tokenToBeAccepted.transferFrom(
+            msg.sender,
+            address(this),
+            tokenInputAmount
+        );
 
         //approve move to lockup
-        tokenToBeSold.approve(address(lockupPlan),amountPurchased);
+        tokenToBeSold.approve(address(lockupPlan), amountPurchased);
         lockupPlan.createPlan(
             msg.sender,
             address(tokenToBeSold),
@@ -255,7 +284,80 @@ contract ProductShareTokenSale is
         );
     }
 
-    //NOTE add function here to withdraw tokens at the end of the sale
+    function withdrawAll(address withdrawAddress) public nonReentrant {
+        if (!hasRole(SALE_ADMIN_ROLE, _msgSender())) {
+            revert Unauthorized(0);
+        }
 
-    //NOTE: add funciton here to service refunds of soft cap is not met
+        if (block.timestamp < endDate) {
+            revert SaleHasNotEnded();
+        }
+
+        if (hasBeenWithdrawn) {
+            revert AlreadyWithdrawn();
+        }
+
+        if (totalAmountInvested < softCap) {
+            revert SoftcapNotReached();
+        }
+
+        hasBeenWithdrawn = true;
+
+        //transfer all the proceeds of the sale.
+        tokenToBeAccepted.transfer(withdrawAddress, totalAmountInvested);
+        //transfer all the unsold tokens.
+        uint256 unsoldBalance = tokenToBeSold.balanceOf(address(this));
+        tokenToBeSold.transfer(withdrawAddress, unsoldBalance);
+
+        emit withdrawn(totalAmountInvested, unsoldBalance);
+    }
+
+    function setSoftCapAdminRefundAddress(address newSoftCapAdminRefundAddress)
+        public
+    {
+        if (!hasRole(SALE_ADMIN_ROLE, _msgSender())) {
+            revert Unauthorized(0);
+        }
+
+        if (newSoftCapAdminRefundAddress == address(0)) {
+            revert ZeroAddress();
+        }
+
+        softCapAdminRefundAddress = newSoftCapAdminRefundAddress;
+
+        emit softCapAdminRefundAddressSet(softCapAdminRefundAddress);
+    }
+
+    function refund(uint256 planId) public nonReentrant {
+        //the sale needs to be over
+        if (block.timestamp < endDate) {
+            revert SaleHasNotEnded();
+        }
+        //the amount invested needs to be lower than the soft cap
+        if (totalAmountInvested >= softCap) {
+            revert SoftcapReached();
+        }
+
+        if (userAmountInvested[msg.sender] == 0) {
+            revert NothingToRefund();
+        }
+
+        uint256 refundAmount = userAmountInvested[msg.sender];
+
+        //set the amount that the user has invested to 0
+        userAmountInvested[msg.sender] = 0;
+
+        //return the amount that the user has invested
+        tokenToBeAccepted.transfer(msg.sender, refundAmount);
+
+        //send plan to admin
+        lockupPlan.safeTransferFrom(
+            msg.sender,
+            softCapAdminRefundAddress,
+            planId
+        );
+
+        //emit events
+        emit userSoftcapRefundProcessed(msg.sender, refundAmount);
+    }
 }

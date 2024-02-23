@@ -15,10 +15,11 @@ contract ShareCash is
     PausableUpgradeable,
     ERC20BurnableUpgradeable
 {
-    function initialize(
-        string memory name,
-        string memory symbol
-    ) public virtual initializer {
+    function initialize(string memory name, string memory symbol)
+        public
+        virtual
+        initializer
+    {
         __ERC20_init(name, symbol);
         __Pausable_init_unchained();
 
@@ -49,18 +50,19 @@ contract ShareCash is
         bool blacklistedStatus
     );
 
-    function _update(address from, address to, uint256 value)
-        internal
-        override
-    {
+    function _update(
+        address from,
+        address to,
+        uint256 value
+    ) internal override {
         super._update(from, to, value);
-        if(paused()){
+        if (paused()) {
             revert CannotTransferWhenPaused();
         }
-        if(blacklisted[from]){
+        if (blacklisted[from]) {
             revert CannotTransferWhenBlacklisted(from);
         }
-        if(blacklisted[to]){
+        if (blacklisted[to]) {
             revert CannotTransferWhenBlacklisted(to);
         }
     }
@@ -75,10 +77,10 @@ contract ShareCash is
      * - the caller must have the `MINTER_ROLE`.
      */
     function mint(address to, uint256 amount) public virtual {
-        if(!hasRole(MINTER_ROLE, _msgSender())){
-            revert DoesNotHaveMinterRole( _msgSender());
+        if (!hasRole(MINTER_ROLE, _msgSender())) {
+            revert DoesNotHaveMinterRole(_msgSender());
         }
-        if(to==address(0)){
+        if (to == address(0)) {
             revert ZeroAddress();
         }
         _mint(to, amount);
@@ -94,7 +96,7 @@ contract ShareCash is
      * - the caller must have the `PAUSER_ROLE`.
      */
     function pause() public virtual {
-        if(!hasRole(PAUSER_ROLE, _msgSender())){
+        if (!hasRole(PAUSER_ROLE, _msgSender())) {
             revert DoesNotHavePauserRole(_msgSender());
         }
         _pause();
@@ -110,20 +112,19 @@ contract ShareCash is
      * - the caller must have the `PAUSER_ROLE`.
      */
     function unpause() public virtual {
-        if(!hasRole(PAUSER_ROLE, _msgSender())){
+        if (!hasRole(PAUSER_ROLE, _msgSender())) {
             revert DoesNotHavePauserRole(_msgSender());
         }
         _unpause();
     }
 
-    function modifyblacklistedStatus(
-        address toModify,
-        bool blacklistedStatus
-    ) public {
-        if(!hasRole(BLACKLISTER_ROLE, _msgSender())){
+    function modifyblacklistedStatus(address toModify, bool blacklistedStatus)
+        public
+    {
+        if (!hasRole(BLACKLISTER_ROLE, _msgSender())) {
             revert DoesNotHaveBlacklisterRole(_msgSender());
         }
-        if(toModify==address(0)){
+        if (toModify == address(0)) {
             revert ZeroAddress();
         }
         blacklisted[toModify] = blacklistedStatus;
