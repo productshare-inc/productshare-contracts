@@ -29,8 +29,10 @@ contract ProductShareTokenSale is
     bool public isPrivateSale;
     mapping(address => bool) public isWhiteListed;
 
-    mapping(address => uint256) public userAmountInvested;
-    uint256 public totalAmountInvested;
+    mapping(address => mapping(uint256 => uint256))
+        public userAmountInvestedPerPlan; //invested amount invested for user per plan
+    mapping(address => uint256) public userAmountInvestedTotal; //total amount invested for a user.
+    uint256 public totalAmountInvested; //total amount invested for all users.
 
     bytes32 public constant SALE_ADMIN_ROLE = keccak256("SALE_ADMIN_ROLE");
 
@@ -48,6 +50,8 @@ contract ProductShareTokenSale is
     bool public hasBeenWithdrawn;
 
     address public softCapAdminRefundAddress;
+
+    bool public vestingInfoSet;
 
     /*
     Custom Errors
@@ -67,6 +71,7 @@ contract ProductShareTokenSale is
     error SoftcapReached();
     error AlreadyWithdrawn();
     error NothingToRefund();
+    error VestingInfoAlreadySet();
 
     /*
     0 -> does not have SALE_ADMIN_ROLE role
@@ -126,6 +131,8 @@ contract ProductShareTokenSale is
 
         softCapAdminRefundAddress = _msgSender();
 
+        isSaleActive=true;
+
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _grantRole(SALE_ADMIN_ROLE, _msgSender());
     }
@@ -148,10 +155,15 @@ contract ProductShareTokenSale is
             revert WrongVestingData();
         }
 
+        if (vestingInfoSet) {
+            revert VestingInfoAlreadySet();
+        }
+
         lockupPlan = _lockUpPlan;
         cliffLength = _cliffLength;
         vestPeriod = _vestPeriod;
         vestingLength = _vestingLength;
+        vestingInfoSet=true;
     }
 
     function batchWhiteListAdd(address[] calldata whitelistedAddresses) public {
@@ -170,9 +182,9 @@ contract ProductShareTokenSale is
         emit addressWhiteListed(whitelistedAddresses);
     }
 
-    function batchWhiteListRemove(address[] calldata unWhitelistedAddresses)
-        public
-    {
+    function batchWhiteListRemove(
+        address[] calldata unWhitelistedAddresses
+    ) public {
         if (!hasRole(SALE_ADMIN_ROLE, _msgSender())) {
             revert Unauthorized(0);
         }
@@ -194,6 +206,10 @@ contract ProductShareTokenSale is
 
         if (_newEndDate <= endDate) {
             revert EndDateMustBeInFuture();
+        }
+
+        if (block.timestamp >= endDate) {
+            revert SaleHasEnded();
         }
 
         endDate = _newEndDate;
@@ -248,18 +264,18 @@ contract ProductShareTokenSale is
             revert HardcapReached();
         }
 
-        if(isPrivateSale && !isWhiteListed[msg.sender]){
+        if (isPrivateSale && !isWhiteListed[msg.sender]) {
             revert Unauthorized(1);
         }
 
         uint256 amountPurchased = ((tokenInputAmount *
-            10**tokenToBeSold.decimals()) / salePrice);
+            10 ** tokenToBeSold.decimals()) / salePrice);
 
         //tokens per period
         uint256 numPeriods = vestingLength / vestPeriod;
         uint256 tokensPerPeriod = amountPurchased / numPeriods;
 
-        userAmountInvested[msg.sender] += tokenInputAmount;
+        userAmountInvestedTotal[msg.sender] += tokenInputAmount;
 
         totalAmountInvested += tokenInputAmount;
 
@@ -274,7 +290,7 @@ contract ProductShareTokenSale is
 
         //approve move to lockup
         tokenToBeSold.approve(address(lockupPlan), amountPurchased);
-        lockupPlan.createPlan(
+        uint256 newPlanId = lockupPlan.createPlan(
             msg.sender,
             address(tokenToBeSold),
             amountPurchased,
@@ -283,6 +299,9 @@ contract ProductShareTokenSale is
             tokensPerPeriod,
             vestPeriod
         );
+
+        //we need the plan id for this, this is why this is here and not before, but thankfully we're using the re-entrancy guard.
+        userAmountInvestedPerPlan[msg.sender][newPlanId] = tokenInputAmount;
     }
 
     function withdrawAll(address withdrawAddress) public nonReentrant {
@@ -313,15 +332,19 @@ contract ProductShareTokenSale is
         emit withdrawn(totalAmountInvested, unsoldBalance);
     }
 
-    function setSoftCapAdminRefundAddress(address newSoftCapAdminRefundAddress)
-        public
-    {
+    function setSoftCapAdminRefundAddress(
+        address newSoftCapAdminRefundAddress
+    ) public {
         if (!hasRole(SALE_ADMIN_ROLE, _msgSender())) {
             revert Unauthorized(0);
         }
 
         if (newSoftCapAdminRefundAddress == address(0)) {
             revert ZeroAddress();
+        }
+
+        if (hasBeenWithdrawn) {
+            revert AlreadyWithdrawn();
         }
 
         softCapAdminRefundAddress = newSoftCapAdminRefundAddress;
@@ -339,19 +362,22 @@ contract ProductShareTokenSale is
             revert SoftcapReached();
         }
 
-        if (userAmountInvested[msg.sender] == 0) {
+        if (userAmountInvestedTotal[msg.sender] == 0) {
             revert NothingToRefund();
         }
 
-        uint256 refundAmount = userAmountInvested[msg.sender];
+        uint256 refundAmount = userAmountInvestedPerPlan[msg.sender][planId];
 
-        //set the amount that the user has invested to 0
-        userAmountInvested[msg.sender] = 0;
+        //set the amount that the user has invested, in this plan, to 0
+        userAmountInvestedPerPlan[msg.sender][planId] = 0;
+
+        //lower the user total amount invested over all plans
+        userAmountInvestedTotal[msg.sender] -= refundAmount;
 
         //return the amount that the user has invested
         tokenToBeAccepted.transfer(msg.sender, refundAmount);
 
-        //send plan to admin
+        //send plan to admin (This needs a pre-approval so the token can be moved)
         lockupPlan.safeTransferFrom(
             msg.sender,
             softCapAdminRefundAddress,
@@ -360,5 +386,11 @@ contract ProductShareTokenSale is
 
         //emit events
         emit userSoftcapRefundProcessed(msg.sender, refundAmount);
+    }
+
+    function batchRefund(uint256[] calldata planIds) public nonReentrant {
+        for (uint256 i = 0; i < planIds.length; i++) {
+            refund(i);
+        }
     }
 }

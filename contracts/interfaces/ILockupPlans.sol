@@ -10,7 +10,7 @@ interface ILockupPlans {
         uint256 cliff,
         uint256 rate,
         uint256 period
-    ) external;
+    ) external returns (uint256);
 
     function safeTransferFrom(
         address from,

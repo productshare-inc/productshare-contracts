@@ -1,7 +1,6 @@
 const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 
-
 const TOKEN_NAME = "ShareCash";
 const TOKEN_SYMBOL = "PSS";
 
