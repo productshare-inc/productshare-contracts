@@ -4,7 +4,7 @@ const { time } = require("@nomicfoundation/hardhat-network-helpers")
 
 const { describe } = require("test");
 const BigNumber = require('bignumber.js');
-const { duration } = require("@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time");
+const { duration, increase } = require("@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time");
 const BN = BigNumber.BigNumber;
 
 const Input_Token_Contract_Name = "MockStableCoin";//need to make this with 6 decimals
@@ -35,7 +35,7 @@ describe("ProductShareTokenSale Unit Tests", function () {
     //deploy all contracts
     beforeEach(async function () {
         INPUT_TOKEN = await upgrades.deployProxy(this.InputTokenFactory, ["MockStableCoin", "MUSD"])
-        TOKEN_TO_SELL = await upgrades.deployProxy(this.InputTokenFactory, ["StakeShare", "PSS"])
+        TOKEN_TO_SELL = await upgrades.deployProxy(this.TokenToSellFactory, ["StakeShare", "PSS"])
         MOCK_TOKEN_LOCKER = await upgrades.deployProxy(this.MockHedgeyTokenLockerFactory, [])
 
         const adminMockTokenAmount = BigInt(10000000) * (BigInt("1000000"))//10 million USDM
@@ -103,7 +103,7 @@ describe("ProductShareTokenSale Unit Tests", function () {
         }
     }
 
-    async function setSoftCapAdminRefundAddress(signer,newSoftCapAdminRefundAddress, expectedError) {
+    async function setSoftCapAdminRefundAddress(signer, newSoftCapAdminRefundAddress, expectedError) {
         let tx = TOKEN_SALE.connect(signer).setSoftCapAdminRefundAddress(newSoftCapAdminRefundAddress);
         if (!expectedError) {
             await tx
@@ -113,7 +113,7 @@ describe("ProductShareTokenSale Unit Tests", function () {
     }
 
 
-    async function pause(signer,reason, expectedError) {
+    async function pause(signer, reason, expectedError) {
         let tx = TOKEN_SALE.connect(signer).pauseSale(reason);
         if (!expectedError) {
             await tx
@@ -130,7 +130,38 @@ describe("ProductShareTokenSale Unit Tests", function () {
             await expect(tx).to.be.revertedWithCustomError(TOKEN_SALE, expectedError)
         }
     }
-    
+
+    async function buyTokens(signer, owner, tokenInputAmount, expectedError) {
+
+        await INPUT_TOKEN.connect(owner).transfer(signer.address, tokenInputAmount);
+
+        await INPUT_TOKEN.connect(signer).approve(TOKEN_SALE.target, tokenInputAmount)
+
+        let tx = TOKEN_SALE.connect(signer).buy(tokenInputAmount);
+        if (!expectedError) {
+            await tx
+        } else {
+            await expect(tx).to.be.revertedWithCustomError(TOKEN_SALE, expectedError)
+        }
+    }
+
+    async function withdrawAll(signer, expectedError) {
+        let tx = TOKEN_SALE.connect(signer).withdrawAll(signer.address);
+        if (!expectedError) {
+            await tx
+        } else {
+            await expect(tx).to.be.revertedWithCustomError(TOKEN_SALE, expectedError)
+        }
+    }
+
+    async function refund(signer, planId, expectedError) {
+        let tx = TOKEN_SALE.connect(signer).refund(planId);
+        if (!expectedError) {
+            await tx
+        } else {
+            await expect(tx).to.be.revertedWithCustomError(TOKEN_SALE, expectedError)
+        }
+    }
 
 
     describe("Unit Tests For Token Sale Contract", function () {
@@ -239,7 +270,7 @@ describe("ProductShareTokenSale Unit Tests", function () {
 
                 })
 
-                it("setting softCapAdminRefundAddress works as expected", async function(){
+                it("setting softCapAdminRefundAddress works as expected", async function () {
 
                     const saleStart = await time.latest();
                     const saleDuration = 30;//30 seconds
@@ -268,7 +299,7 @@ describe("ProductShareTokenSale Unit Tests", function () {
                     TOKEN_SALE = res.newTokenSale
 
 
-                    await setSoftCapAdminRefundAddress(this.owner,this.user2.address)
+                    await setSoftCapAdminRefundAddress(this.owner, this.user2.address)
 
                     expect(await TOKEN_SALE.softCapAdminRefundAddress()).to.equal(this.user2.address);
 
@@ -412,7 +443,7 @@ describe("ProductShareTokenSale Unit Tests", function () {
 
                 })
 
-                it("setting softCapAdminRefundAddress fails - unauthorized", async function(){
+                it("setting softCapAdminRefundAddress fails - unauthorized", async function () {
 
                     const saleStart = await time.latest();
                     const saleDuration = 30;//30 seconds
@@ -440,12 +471,12 @@ describe("ProductShareTokenSale Unit Tests", function () {
                     )
                     TOKEN_SALE = res.newTokenSale
 
-                    await setSoftCapAdminRefundAddress(this.user1,this.user2.address,"Unauthorized")
+                    await setSoftCapAdminRefundAddress(this.user1, this.user2.address, "Unauthorized")
 
 
                 })
 
-                it("setting softCapAdminRefundAddress fails - ZeroAddress", async function(){
+                it("setting softCapAdminRefundAddress fails - ZeroAddress", async function () {
 
                     const saleStart = await time.latest();
                     const saleDuration = 30;//30 seconds
@@ -473,7 +504,7 @@ describe("ProductShareTokenSale Unit Tests", function () {
                     )
                     TOKEN_SALE = res.newTokenSale
 
-                    await setSoftCapAdminRefundAddress(this.owner,'0x0000000000000000000000000000000000000000',"ZeroAddress")
+                    await setSoftCapAdminRefundAddress(this.owner, '0x0000000000000000000000000000000000000000', "ZeroAddress")
                 })
 
             })
@@ -671,17 +702,17 @@ describe("ProductShareTokenSale Unit Tests", function () {
 
                 })
 
-                it("Whitelist remove fails - Unauthorized", async function (){
+                it("Whitelist remove fails - Unauthorized", async function () {
 
-                    const saleStart= await time.latest();
+                    const saleStart = await time.latest();
                     const saleDuration = 30;//30 seconds
-                    const isPrivateSale=true;
-        
-                    const softCap= BigInt("100000000000"); //1 hundred thousand usdm
+                    const isPrivateSale = true;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
                     const hardCap = BigInt("1000000000000");//1 million usdm
-        
-                    const salePrice =BigInt("220000"); //22 cents usdm
-                    
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
                     const res = await newFundedTokenSale(
                         INPUT_TOKEN,
                         TOKEN_TO_SELL,
@@ -693,35 +724,35 @@ describe("ProductShareTokenSale Unit Tests", function () {
                         hardCap,
                         salePrice
                     )
-                    TOKEN_SALE=res.newTokenSale
+                    TOKEN_SALE = res.newTokenSale
 
 
                     expect(await TOKEN_SALE.isWhiteListed(this.user1.address)).to.equal(false);
                     expect(await TOKEN_SALE.isWhiteListed(this.user2.address)).to.equal(false);
 
-                    await batchAddWhitelist(this.owner,[this.user1,this.user2])
+                    await batchAddWhitelist(this.owner, [this.user1, this.user2])
 
                     expect(await TOKEN_SALE.isWhiteListed(this.user1.address)).to.equal(true);
                     expect(await TOKEN_SALE.isWhiteListed(this.user2.address)).to.equal(true);
-                    
 
-                    await batchRemoveWhitelist(this.user1,[this.user1,this.user2],"Unauthorized")
+
+                    await batchRemoveWhitelist(this.user1, [this.user1, this.user2], "Unauthorized")
 
 
 
                 })
 
-                it("Whitelist remove fails - Public Sale", async function (){
+                it("Whitelist remove fails - Public Sale", async function () {
 
-                    const saleStart= await time.latest();
+                    const saleStart = await time.latest();
                     const saleDuration = 30;//30 seconds
-                    const isPrivateSale=false;
-        
-                    const softCap= BigInt("100000000000"); //1 hundred thousand usdm
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
                     const hardCap = BigInt("1000000000000");//1 million usdm
-        
-                    const salePrice =BigInt("220000"); //22 cents usdm
-                    
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
                     const res = await newFundedTokenSale(
                         INPUT_TOKEN,
                         TOKEN_TO_SELL,
@@ -733,9 +764,9 @@ describe("ProductShareTokenSale Unit Tests", function () {
                         hardCap,
                         salePrice
                     )
-                    TOKEN_SALE=res.newTokenSale
-            
-                    await batchRemoveWhitelist(this.owner,[],"IsPublicSale")
+                    TOKEN_SALE = res.newTokenSale
+
+                    await batchRemoveWhitelist(this.owner, [], "IsPublicSale")
 
                 })
 
@@ -772,11 +803,11 @@ describe("ProductShareTokenSale Unit Tests", function () {
                     )
                     TOKEN_SALE = res.newTokenSale
 
-                    const newEndTime=saleStart+60;
+                    const newEndTime = saleStart + 60;
 
-                    await extendEndTime(this.owner,newEndTime)
+                    await extendEndTime(this.owner, newEndTime)
 
-                    expect(await TOKEN_SALE.endDate()).to.equal(saleStart+60);
+                    expect(await TOKEN_SALE.endDate()).to.equal(saleStart + 60);
 
 
                 })
@@ -809,9 +840,9 @@ describe("ProductShareTokenSale Unit Tests", function () {
                     )
                     TOKEN_SALE = res.newTokenSale
 
-                    const newEndTime=saleStart+60;
+                    const newEndTime = saleStart + 60;
 
-                    await extendEndTime(this.user1,newEndTime,"Unauthorized")
+                    await extendEndTime(this.user1, newEndTime, "Unauthorized")
 
                 })
 
@@ -839,9 +870,9 @@ describe("ProductShareTokenSale Unit Tests", function () {
                     )
                     TOKEN_SALE = res.newTokenSale
 
-                    const newEndTime=saleStart;
+                    const newEndTime = saleStart;
 
-                    await extendEndTime(this.owner,newEndTime,"EndDateMustBeInFuture")
+                    await extendEndTime(this.owner, newEndTime, "EndDateMustBeInFuture")
 
                 })
 
@@ -869,11 +900,11 @@ describe("ProductShareTokenSale Unit Tests", function () {
                     )
                     TOKEN_SALE = res.newTokenSale
 
-                    const newEndTime=saleStart+60;
+                    const newEndTime = saleStart + 60;
 
                     await time.increase(31)
 
-                    await extendEndTime(this.owner,newEndTime,"SaleHasEnded")
+                    await extendEndTime(this.owner, newEndTime, "SaleHasEnded")
 
                 })
 
@@ -887,7 +918,7 @@ describe("ProductShareTokenSale Unit Tests", function () {
 
             describe("Success", function () {
 
-                it("Pausing works", async function(){
+                it("Pausing works", async function () {
 
                     const saleStart = await time.latest();
                     const saleDuration = 30;//30 seconds
@@ -923,7 +954,7 @@ describe("ProductShareTokenSale Unit Tests", function () {
 
                 })
 
-                it("Unpausing works", async function(){
+                it("Unpausing works", async function () {
 
                     const saleStart = await time.latest();
                     const saleDuration = 30;//30 seconds
@@ -969,7 +1000,7 @@ describe("ProductShareTokenSale Unit Tests", function () {
 
             describe("Failure", function () {
 
-                it("Pausing fails -unauthorized", async function(){
+                it("Pausing fails -unauthorized", async function () {
 
                     const saleStart = await time.latest();
                     const saleDuration = 30;//30 seconds
@@ -997,11 +1028,11 @@ describe("ProductShareTokenSale Unit Tests", function () {
                     )
                     TOKEN_SALE = res.newTokenSale
 
-                    await pause(this.user1, "test","Unauthorized")
+                    await pause(this.user1, "test", "Unauthorized")
 
                 })
 
-                it("Pausing fails - SaleHasEnded", async function(){
+                it("Pausing fails - SaleHasEnded", async function () {
 
                     const saleStart = await time.latest();
                     const saleDuration = 30;//30 seconds
@@ -1031,11 +1062,11 @@ describe("ProductShareTokenSale Unit Tests", function () {
 
                     await time.increase(31)
 
-                    await pause(this.owner, "test","SaleHasEnded")
+                    await pause(this.owner, "test", "SaleHasEnded")
 
                 })
-                
-                it("Pausing fails - Already paused", async function(){
+
+                it("Pausing fails - Already paused", async function () {
 
                     const saleStart = await time.latest();
                     const saleDuration = 30;//30 seconds
@@ -1065,11 +1096,11 @@ describe("ProductShareTokenSale Unit Tests", function () {
 
                     await pause(this.owner, "test")
 
-                    await pause(this.owner, "test","SaleIsPaused")
+                    await pause(this.owner, "test", "SaleIsPaused")
 
                 })
 
-                it("UnPausing fails - Unauthorized", async function(){
+                it("UnPausing fails - Unauthorized", async function () {
 
                     const saleStart = await time.latest();
                     const saleDuration = 30;//30 seconds
@@ -1099,12 +1130,12 @@ describe("ProductShareTokenSale Unit Tests", function () {
 
                     await pause(this.owner, "test")
 
-                    await unpause(this.user1,"Unauthorized")
+                    await unpause(this.user1, "Unauthorized")
 
                 })
 
                 //todo: is this really a scenario we want? What about increasing the end time by the pause length?
-                it("UnPausing fails - SaleHasEnded", async function(){
+                it("UnPausing fails - SaleHasEnded", async function () {
 
                     const saleStart = await time.latest();
                     const saleDuration = 30;//30 seconds
@@ -1136,11 +1167,11 @@ describe("ProductShareTokenSale Unit Tests", function () {
 
                     await time.increase(31);
 
-                    await unpause(this.owner,"SaleHasEnded")
+                    await unpause(this.owner, "SaleHasEnded")
 
                 })
 
-                it("UnPausing fails - Already Active", async function(){
+                it("UnPausing fails - Already Active", async function () {
 
                     const saleStart = await time.latest();
                     const saleDuration = 30;//30 seconds
@@ -1168,7 +1199,7 @@ describe("ProductShareTokenSale Unit Tests", function () {
                     )
                     TOKEN_SALE = res.newTokenSale
 
-                    await unpause(this.owner,"SaleIsActiveAlready")
+                    await unpause(this.owner, "SaleIsActiveAlready")
 
                 })
 
@@ -1177,67 +1208,836 @@ describe("ProductShareTokenSale Unit Tests", function () {
 
         })
 
+        describe("Buying", function () {
+
+            describe("Success", function () {
+
+                it("Buying tokens succeeds (single user, single buy)", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = salePrice * BigInt(10);//should buy 10 tokens
+
+                    const tokenSaleBalanceBefore = await INPUT_TOKEN.balanceOf(TOKEN_SALE.target)
+                    const expectedTokenAmountPurchased = BigInt("10000000000000000000")
+                    await buyTokens(this.user1, this.owner, amountToSpend);
+
+                    expect(await TOKEN_SALE.userAmountInvestedTotal(this.user1.address)).to.be.equal(amountToSpend)
+                    expect(await TOKEN_SALE.amountOfTokenSold()).to.be.equal(expectedTokenAmountPurchased)
+                    expect(await TOKEN_SALE.totalAmountInvested()).to.be.equal(amountToSpend)
+                    expect(await TOKEN_SALE.userAmountInvestedPerPlan(this.user1.address, 1)).to.be.equal(amountToSpend)
+
+                    expect(await INPUT_TOKEN.balanceOf(TOKEN_SALE.target)).to.be.equal(tokenSaleBalanceBefore + amountToSpend)
+
+                })
+
+                it("Buying tokens succeeds (multi user, single buys)", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend1 = salePrice * BigInt(10);//should buy 10 tokens
+
+                    const tokenSaleBalanceBefore1 = await INPUT_TOKEN.balanceOf(TOKEN_SALE.target)
+                    const expectedTokenAmountPurchased1 = BigInt("10000000000000000000")
+                    await buyTokens(this.user1, this.owner, amountToSpend1);
+
+                    expect(await TOKEN_SALE.userAmountInvestedTotal(this.user1.address)).to.be.equal(amountToSpend1)
+                    expect(await TOKEN_SALE.amountOfTokenSold()).to.be.equal(expectedTokenAmountPurchased1)
+                    expect(await TOKEN_SALE.totalAmountInvested()).to.be.equal(amountToSpend1)
+                    expect(await TOKEN_SALE.userAmountInvestedPerPlan(this.user1.address, 1)).to.be.equal(amountToSpend1)
+
+                    expect(await INPUT_TOKEN.balanceOf(TOKEN_SALE.target)).to.be.equal(tokenSaleBalanceBefore1 + amountToSpend1)
+
+
+                    const amountToSpend2 = salePrice * BigInt(100);//should buy 100 tokens
+                    const expectedTokenAmountPurchased2 = BigInt("100000000000000000000")
+                    const tokenSaleBalanceBefore2 = await INPUT_TOKEN.balanceOf(TOKEN_SALE.target)
+
+                    await buyTokens(this.user2, this.owner, amountToSpend2);
+                    expect(await TOKEN_SALE.userAmountInvestedTotal(this.user2.address)).to.be.equal(amountToSpend2)
+                    expect(await TOKEN_SALE.amountOfTokenSold()).to.be.equal(expectedTokenAmountPurchased1 + expectedTokenAmountPurchased2)
+                    expect(await TOKEN_SALE.totalAmountInvested()).to.be.equal(amountToSpend1 + amountToSpend2)
+                    expect(await TOKEN_SALE.userAmountInvestedPerPlan(this.user2.address, 2)).to.be.equal(amountToSpend2)
+
+                    expect(await INPUT_TOKEN.balanceOf(TOKEN_SALE.target)).to.be.equal(tokenSaleBalanceBefore2 + amountToSpend2)
+
+
+                })
+
+                it("Buying tokens succeeds (single user, multi buys)", async function () {
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend1 = salePrice * BigInt(10);//should buy 10 tokens
+
+                    const tokenSaleBalanceBefore1 = await INPUT_TOKEN.balanceOf(TOKEN_SALE.target)
+                    const expectedTokenAmountPurchased1 = BigInt("10000000000000000000")
+                    await buyTokens(this.user1, this.owner, amountToSpend1);
+
+                    expect(await TOKEN_SALE.userAmountInvestedTotal(this.user1.address)).to.be.equal(amountToSpend1)
+                    expect(await TOKEN_SALE.amountOfTokenSold()).to.be.equal(expectedTokenAmountPurchased1)
+                    expect(await TOKEN_SALE.totalAmountInvested()).to.be.equal(amountToSpend1)
+                    expect(await TOKEN_SALE.userAmountInvestedPerPlan(this.user1.address, 1)).to.be.equal(amountToSpend1)
+
+                    expect(await INPUT_TOKEN.balanceOf(TOKEN_SALE.target)).to.be.equal(tokenSaleBalanceBefore1 + amountToSpend1)
+
+
+                    const amountToSpend2 = salePrice * BigInt(100);//should buy 100 tokens
+                    const expectedTokenAmountPurchased2 = BigInt("100000000000000000000")
+                    const tokenSaleBalanceBefore2 = await INPUT_TOKEN.balanceOf(TOKEN_SALE.target)
+
+
+                    await buyTokens(this.user1, this.owner, amountToSpend2);
+                    expect(await TOKEN_SALE.userAmountInvestedTotal(this.user1.address)).to.be.equal(amountToSpend1 + amountToSpend2)
+                    expect(await TOKEN_SALE.amountOfTokenSold()).to.be.equal(expectedTokenAmountPurchased1 + expectedTokenAmountPurchased2)
+                    expect(await TOKEN_SALE.totalAmountInvested()).to.be.equal(amountToSpend1 + amountToSpend2)
+                    expect(await TOKEN_SALE.userAmountInvestedPerPlan(this.user1.address, 2)).to.be.equal(amountToSpend2)
+
+                    expect(await INPUT_TOKEN.balanceOf(TOKEN_SALE.target)).to.be.equal(tokenSaleBalanceBefore2 + amountToSpend2)
+
+                })
+            })
+
+
+            describe("Failure", function () {
+                it("Buying tokens fails - sale is paused", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+
+                    await pause(this.owner, "test")
+
+                    const amountToSpend = salePrice * BigInt(10);//should buy 10 tokens
+
+                    await buyTokens(this.user1, this.owner, amountToSpend, "SaleIsPaused");
 
 
 
+                })
+
+                it("Buying tokens fails - sale not started", async function () {
+
+                    const saleStart = await time.latest() + 5000;
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = salePrice * BigInt(10);//should buy 10 tokens
+
+                    await buyTokens(this.user1, this.owner, amountToSpend, "SaleNotStarted");
+
+
+                })
+
+                it("Buying tokens fails - sale ended", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = salePrice * BigInt(10);//should buy 10 tokens
+
+                    await increase(60)
+
+                    await buyTokens(this.user1, this.owner, amountToSpend, "SaleHasEnded");
+
+
+                })
+
+                it("Buying tokens fails - ZeroInputToken", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = 0;
+
+                    await buyTokens(this.user1, this.owner, amountToSpend, "ZeroInputToken");
+
+
+                })
+
+                it("Buying tokens fails - Hard cap reached", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = hardCap + BigInt(1);
+
+                    await buyTokens(this.user1, this.owner, amountToSpend, "HardcapReached");
+
+
+                })
+
+                it("Buying tokens fails - unauthorized in private sale", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = true;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = salePrice * BigInt(10);//should buy 10 tokens
+
+                    await buyTokens(this.user1, this.owner, amountToSpend, "Unauthorized");
+
+
+                })
+            })
+
+        })
+
+
+        describe("Withdrawing funds", function () {
+
+            describe("Success", function () {
+
+                it("Withdraw works", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = softCap + salePrice;//soft cap plus 1 tokens
+
+                    await buyTokens(this.user1, this.owner, amountToSpend);
+
+                    //sale is done
+                    await increase(40)
+
+                    const withdrawAddressBalanceInputToken = await INPUT_TOKEN.balanceOf(this.owner.address);
+                    const withdrawAddressBalanceTokenToSell = await TOKEN_TO_SELL.balanceOf(this.owner.address);
+
+                    const totalAmountInvested = await TOKEN_SALE.totalAmountInvested();
+                    const unsoldBalance = await TOKEN_TO_SELL.balanceOf(TOKEN_SALE.target);
+
+                    await withdrawAll(this.owner)
+
+                    expect(await TOKEN_SALE.hasBeenWithdrawn()).to.be.equal(true)
+
+                    expect(await INPUT_TOKEN.balanceOf(this.owner.address)).to.be.equal(withdrawAddressBalanceInputToken + totalAmountInvested)
+                    expect(await TOKEN_TO_SELL.balanceOf(this.owner.address)).to.be.equal(withdrawAddressBalanceTokenToSell + unsoldBalance)
+
+                })
+            })
+
+            describe("Failure", function () {
+
+                it("Withdraw fails - unauthorized", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = softCap + salePrice;//soft cap plus 1 tokens
+
+                    await buyTokens(this.user1, this.owner, amountToSpend);
+
+                    //sale is done
+                    await increase(40)
+
+                    await withdrawAll(this.user1, "Unauthorized")
+
+                })
+
+                it("Withdraw fails - SaleHasNotEnded", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = softCap + salePrice;//soft cap plus 1 tokens
+
+                    await buyTokens(this.user1, this.owner, amountToSpend);
+
+
+                    await withdrawAll(this.owner, "SaleHasNotEnded")
+
+                })
+
+                it("Withdraw fails - AlreadyWithdrawn", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = softCap + salePrice;//soft cap plus 1 tokens
+
+                    await buyTokens(this.user1, this.owner, amountToSpend);
+
+                    //sale is done
+                    await increase(40)
+
+                    await withdrawAll(this.owner)
+
+                    await withdrawAll(this.owner, "AlreadyWithdrawn")
+
+
+                })
+
+                it("Withdraw fails - SoftcapNotReached", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = salePrice * BigInt(100)
+
+                    await buyTokens(this.user1, this.owner, amountToSpend);
+
+                    //sale is done
+                    await increase(40)
+
+                    await withdrawAll(this.owner, "SoftcapNotReached")
+
+
+                })
+            })
+        })
+
+        describe("softcap refunding", function () {
+
+            describe("Success", function () {
+
+                it.only("Refund works", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = salePrice * BigInt(10);//should buy 10 tokens
+
+                    await buyTokens(this.user1, this.owner, amountToSpend);
+
+                    await increase(60)
+
+                    const plan=1;
+
+                    const previousUserAmountInvestedTotal=await TOKEN_SALE.userAmountInvestedTotal(this.user1)
+                    const refundAmount=await TOKEN_SALE.userAmountInvestedPerPlan(this.user1.address,plan);
+                    
+                    const userBalanceBefore=await INPUT_TOKEN.balanceOf(this.user1.address)
+
+                    await refund(this.user1, 1);
+
+                    expect(await TOKEN_SALE.userAmountInvestedPerPlan(this.user1.address,plan)).to.be.equal(0)
+                    expect(await TOKEN_SALE.userAmountInvestedTotal(this.user1)).to.be.equal(previousUserAmountInvestedTotal-refundAmount)
+                    expect(await INPUT_TOKEN.balanceOf(this.user1.address)).to.be.equal(userBalanceBefore+refundAmount)
+
+                })
+
+            })
+
+            describe("Failure", function () {
+
+                it("Refund fails - SaleHasNotEnded", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = salePrice * BigInt(10);//should buy 10 tokens
+
+                    await buyTokens(this.user1, this.owner, amountToSpend);
+
+                    //await increase(60)
+
+                    const plan=1;
+
+                    const previousUserAmountInvestedTotal=await TOKEN_SALE.userAmountInvestedTotal(this.user1)
+                    const refundAmount=await TOKEN_SALE.userAmountInvestedPerPlan(this.user1.address,plan);
+                    
+                    const userBalanceBefore=await INPUT_TOKEN.balanceOf(this.user1.address)
+
+                    await refund(this.user1, 1,"SaleHasNotEnded");
+
+                })
+
+                it("Refund fails - SoftcapReached", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = softCap+(salePrice * BigInt(10));
+
+                    await buyTokens(this.user1, this.owner, amountToSpend);
+
+                    await increase(60)
+
+                    const plan=1;
+
+                    const previousUserAmountInvestedTotal=await TOKEN_SALE.userAmountInvestedTotal(this.user1)
+                    const refundAmount=await TOKEN_SALE.userAmountInvestedPerPlan(this.user1.address,plan);
+                    
+                    const userBalanceBefore=await INPUT_TOKEN.balanceOf(this.user1.address)
+
+                    await refund(this.user1, 1,"SoftcapReached");
+
+
+
+                })
+
+                it("Refund fails -NothingToRefund", async function () {
+
+                    const saleStart = await time.latest();
+                    const saleDuration = 30;//30 seconds
+                    const isPrivateSale = false;
+
+                    const softCap = BigInt("100000000000"); //1 hundred thousand usdm
+                    const hardCap = BigInt("1000000000000");//1 million usdm
+
+                    const salePrice = BigInt("220000"); //22 cents usdm
+
+                    const cliffLength = 10;//10 seconds
+                    const period = 1;//1 seconds period
+                    const lockLength = 60;//60 sec total lock
+
+                    const res = await newFundedTokenSale(
+                        INPUT_TOKEN,
+                        TOKEN_TO_SELL,
+                        this.tokenSaleFactory,
+                        saleStart,
+                        saleDuration,
+                        isPrivateSale,
+                        softCap,
+                        hardCap,
+                        salePrice
+                    )
+                    TOKEN_SALE = res.newTokenSale
+
+                    await setVestingInfo(this.owner, MOCK_TOKEN_LOCKER.target, cliffLength, period, lockLength)
+
+                    const amountToSpend = salePrice * BigInt(10);//should buy 10 tokens
+
+                    await buyTokens(this.user1, this.owner, amountToSpend);
+
+                    await increase(60)
+
+                    const plan=1;
+
+                    const previousUserAmountInvestedTotal=await TOKEN_SALE.userAmountInvestedTotal(this.user1)
+                    const refundAmount=await TOKEN_SALE.userAmountInvestedPerPlan(this.user1.address,plan);
+                    
+                    const userBalanceBefore=await INPUT_TOKEN.balanceOf(this.user1.address)
+
+                    await refund(this.user1, 1);
+
+                })
+            })
+        })
     })
-
-
 })
-
-
-
-/*
-
-
-// test scenarios.
-
-We will test the functionality of the token sale contract, not so much the functionality of the hedgey contract.
-This maeans that the hedgey locker functionality will be treated like a black box, at least at this level.
-We will need to mock the hedgey contract for the unit tests.
-We can do a manual test to test hedgey and the redeeming/vesting.
-
-//test that the contract initalizes correctly
-
-//test the setting of the vesting info, including its error scenarios.
-
-//test the whitelist adding and removing, including its error scenarios.
-
-//test the extension of the end time, including its error scenarios.
-
-//test the pausing and unpausing of the sale
-
-//test the purchase of the tokens, incling its error scenarios.
-//test with different token input amounts.
-//test with big numbers to cause some kind of overflow
-//test with zeros, both for the input amount and the sale price
-//test with N consecutive purchases.
-// check the following changes
-    //userAmountInvested for user increases by tokenInputAmount
-    //totalAmountInvested increases by tokenInputAmount
-    //amountOfTokenSold increaaes by amountPurchased
-    //tokenInputAmount gets moved to the contract.
-    //amountPurchased gets moved to hedgey contract
-
-
-
-//test withdraw all, including its error scenarios.
-// check the following changes
-    //hasBeenWithdrawn set to true
-    //totalAmountInvested sent to withdrawAddress
-    //unsoldBalance in the contract sent to withdrawAddress
-    
-    
-//test a user who did a buy later gets refunded because the soft cap was not reached.
-//test the error scenarios.
-
-// check the following changes
-    //userAmountInvested goes to 0
-    //refundAmount aka the old userAmountInvested sent to user.
-    //the user no longer has the payment plan NFT, the softCapAdminRefundAddress has it.
-
-
-
-
-
-*/

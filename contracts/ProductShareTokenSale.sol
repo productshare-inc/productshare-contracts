@@ -36,7 +36,7 @@ contract ProductShareTokenSale is
 
     bytes32 public constant SALE_ADMIN_ROLE = keccak256("SALE_ADMIN_ROLE");
 
-    uint256 amountOfTokenSold; //total amount that has been sold.
+    uint256 public amountOfTokenSold; //total amount that has been sold.
 
     uint256 public hardcap;
     uint256 public softCap;
@@ -72,6 +72,7 @@ contract ProductShareTokenSale is
     error AlreadyWithdrawn();
     error NothingToRefund();
     error VestingInfoAlreadySet();
+    error SaleNotStarted();
 
     /*
     0 -> does not have SALE_ADMIN_ROLE role
@@ -131,7 +132,7 @@ contract ProductShareTokenSale is
 
         softCapAdminRefundAddress = _msgSender();
 
-        isSaleActive=true;
+        isSaleActive = true;
 
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _grantRole(SALE_ADMIN_ROLE, _msgSender());
@@ -163,7 +164,7 @@ contract ProductShareTokenSale is
         cliffLength = _cliffLength;
         vestPeriod = _vestPeriod;
         vestingLength = _vestingLength;
-        vestingInfoSet=true;
+        vestingInfoSet = true;
     }
 
     function batchWhiteListAdd(address[] calldata whitelistedAddresses) public {
@@ -182,9 +183,9 @@ contract ProductShareTokenSale is
         emit addressWhiteListed(whitelistedAddresses);
     }
 
-    function batchWhiteListRemove(
-        address[] calldata unWhitelistedAddresses
-    ) public {
+    function batchWhiteListRemove(address[] calldata unWhitelistedAddresses)
+        public
+    {
         if (!hasRole(SALE_ADMIN_ROLE, _msgSender())) {
             revert Unauthorized(0);
         }
@@ -251,6 +252,10 @@ contract ProductShareTokenSale is
             revert SaleIsPaused();
         }
 
+        if (block.timestamp < startDate) {
+            revert SaleNotStarted();
+        }
+
         if (block.timestamp > endDate) {
             revert SaleHasEnded();
         }
@@ -269,7 +274,7 @@ contract ProductShareTokenSale is
         }
 
         uint256 amountPurchased = ((tokenInputAmount *
-            10 ** tokenToBeSold.decimals()) / salePrice);
+            (10**tokenToBeSold.decimals())) / salePrice);
 
         //tokens per period
         uint256 numPeriods = vestingLength / vestPeriod;
@@ -300,7 +305,9 @@ contract ProductShareTokenSale is
             vestPeriod
         );
 
-        //we need the plan id for this, this is why this is here and not before, but thankfully we're using the re-entrancy guard.
+        //we need the plan id for this,
+        // this is why this is here and not before, 
+        //but thankfully we're using the re-entrancy guard.
         userAmountInvestedPerPlan[msg.sender][newPlanId] = tokenInputAmount;
     }
 
@@ -332,9 +339,9 @@ contract ProductShareTokenSale is
         emit withdrawn(totalAmountInvested, unsoldBalance);
     }
 
-    function setSoftCapAdminRefundAddress(
-        address newSoftCapAdminRefundAddress
-    ) public {
+    function setSoftCapAdminRefundAddress(address newSoftCapAdminRefundAddress)
+        public
+    {
         if (!hasRole(SALE_ADMIN_ROLE, _msgSender())) {
             revert Unauthorized(0);
         }
@@ -362,7 +369,7 @@ contract ProductShareTokenSale is
             revert SoftcapReached();
         }
 
-        if (userAmountInvestedTotal[msg.sender] == 0) {
+        if (userAmountInvestedPerPlan[msg.sender][planId] == 0) {
             revert NothingToRefund();
         }
 
