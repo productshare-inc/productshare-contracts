@@ -32,6 +32,17 @@ module.exports = {
     },
   },
   networks: {
+    mainnet: {
+      url: "https://eth-mainnet.g.alchemy.com/v2/-pn5nPFpYKqStQpDXBxA9glOBKOIDdOi",
+      accounts:
+      process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : []
+    },
+    sepolia: {
+      url: "https://eth-sepolia.g.alchemy.com/v2/pXrOXDi7213Lifmy6MyRViWCKkXv-2BI",
+      chainId: 11155111.,
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : []
+    },
     optimisticEthereum: {
       url: "https://opt-mainnet.g.alchemy.com/v2/_CMwzqagiVpMeXJBITzEGH_BtPmrVn6J",
       chainId: 10,
@@ -53,6 +64,8 @@ module.exports = {
     apiKey: {
       optimisticEthereum: process.env.OPTIMISM_SCAN_API_KEY,
       optimisticSepolia: process.env.OPTIMISM_SCAN_API_KEY,
+      sepolia: process.env.ETHER_SCAN_API_KEY,
+      mainnet: process.env.ETHER_SCAN_API_KEY
     },
     customChains: [
       {

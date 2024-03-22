@@ -7,9 +7,10 @@
     "test": "npx hardhat test",
     "compile": "npx hardhat compile",
     "deployShareCash": "npx hardhat run ./scripts/deployment/deployShareCash.js --network optimisticSepolia",
-    "deployGovernor": "npx hardhat run ./scripts/deployment/deployGovernor.js --network optimisticSepolia",
-    "deployStakeShare": "npx hardhat run ./scripts/deployment/deployStakeShare.js --network optimisticSepolia",
-    "deployTokenSale": "npx hardhat run ./scripts/deployment/deployProductShareTokenSale.js --network optimisticSepolia",
+    "deployGovernor": "npx hardhat run ./scripts/deployment/deployGovernor.js --network sepolia",
+    "deployStakeShare": "npx hardhat run ./scripts/deployment/deployStakeShare.js --network sepolia",
+    "deployTokenSale": "npx hardhat run ./scripts/deployment/deployProductShareTokenSale.js --network sepolia",
+    "deployMockStableCoin": "npx hardhat run ./scripts/deployment/deployMockStablecoin.js --network sepolia",
     "size": "npx hardhat size-contracts",
     "lint": "solhint 'contracts/**/*.sol'",
     "format": "prettier --write 'contracts/**/*.sol'"

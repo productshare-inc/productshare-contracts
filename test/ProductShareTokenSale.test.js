@@ -12,6 +12,8 @@ const Token_To_Sell_Contract_Name = "StakeShare";
 const Mock_Hedgey_Locker_Contract_Name = "MockHedgeyTokenLocker"//need to make this mock.
 const Token_Sale_Contract_Name = "ProductShareTokenSale"
 
+const supplyCap = BigInt("333000000000000000000000000")
+
 describe("ProductShareTokenSale Unit Tests", function () {
 
     let INPUT_TOKEN;
@@ -35,7 +37,7 @@ describe("ProductShareTokenSale Unit Tests", function () {
     //deploy all contracts
     beforeEach(async function () {
         INPUT_TOKEN = await upgrades.deployProxy(this.InputTokenFactory, ["MockStableCoin", "MUSD"])
-        TOKEN_TO_SELL = await upgrades.deployProxy(this.TokenToSellFactory, ["StakeShare", "PSS"])
+        TOKEN_TO_SELL = await upgrades.deployProxy(this.TokenToSellFactory, ["StakeShare", "PSS",supplyCap])
         MOCK_TOKEN_LOCKER = await upgrades.deployProxy(this.MockHedgeyTokenLockerFactory, [])
 
         const adminMockTokenAmount = BigInt(10000000) * (BigInt("1000000"))//10 million USDM
@@ -1840,7 +1842,7 @@ describe("ProductShareTokenSale Unit Tests", function () {
 
             describe("Success", function () {
 
-                it.only("Refund works", async function () {
+                it("Refund works", async function () {
 
                     const saleStart = await time.latest();
                     const saleDuration = 30;//30 seconds

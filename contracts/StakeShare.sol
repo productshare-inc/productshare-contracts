@@ -16,7 +16,7 @@ contract StakeShare is
     ERC20BurnableUpgradeable,
     ERC20VotesUpgradeable
 {
-    function initialize(string memory name, string memory symbol)
+    function initialize(string memory name, string memory symbol, uint256 _supplyCap)
         public
         virtual
         initializer
@@ -26,6 +26,8 @@ contract StakeShare is
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
 
         _grantRole(MINTER_ROLE, _msgSender());
+
+        supplyCap=_supplyCap;
     }
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
@@ -38,6 +40,10 @@ contract StakeShare is
     error DoesNotHaveBlacklisterRole(address user);
 
     error ZeroAddress();
+
+    error ExceedsSupplyCap();
+
+    uint256 public supplyCap;
 
     function _update(
         address from,
@@ -62,6 +68,9 @@ contract StakeShare is
         }
         if (to == address(0)) {
             revert ZeroAddress();
+        }
+        if(amount+totalSupply()>supplyCap){
+            revert ExceedsSupplyCap();
         }
         _mint(to, amount);
     }
